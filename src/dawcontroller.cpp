@@ -1508,6 +1508,14 @@ void CMiniLab3DawConnection::SelectChanTG (u8 ucTG)
 	DisplayWriteSimple (line1, "", enabled ? "Off" : "On");
 }
 
+// Add to CMiniLab3DawConnection class
+void CMiniLab3DawConnection::SetPadColor(unsigned nPad, CColor color)
+{
+    if (nPad < 8) {
+        SetPadColor(BankB, static_cast<TPadID>(nPad), color);
+    }
+}
+
 class CKeyLabEs3DawConnection : public CDAWConnection
 {
 public:
@@ -1612,6 +1620,12 @@ void CKeyLabEs3DawConnection::MIDIListener (u8 ucCable, u8 ucChannel, u8 ucType,
 		HandleMenuEvents (m_pUI, ucP1);
 		break;
 	}
+}
+
+// Add to CKeyLabEs3DawConnection class
+void CKeyLabEs3DawConnection::SetPadColor(unsigned nPad, CColor color)
+{
+    // KeyLab Essential 3 doesn't have RGB pads
 }
 
 class CKeyLab2DawConnection : public CDAWConnection
@@ -2227,6 +2241,12 @@ void CKeyLabEsDawConnection::MIDIListener (u8 ucCable, u8 ucChannel, u8 ucType, 
 	}
 }
 
+// Add to CKeyLabEsDawConnection class
+void CKeyLabEsDawConnection::SetPadColor(unsigned nPad, CColor color)
+{
+    // KeyLab Essential doesn't have RGB pads
+}
+
 CDAWController::CDAWController (CMiniDexed *pSynthesizer, CMIDIKeyboard *pKeyboard, CConfig *pConfig, CUserInterface *pUI)
 :	m_pSynthesizer (pSynthesizer),
 	m_pKeyboard (pKeyboard),
@@ -2314,11 +2334,19 @@ void CDAWController::MIDIListener (u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1,
 {
 	if (m_pDAWConnection)
 		m_pDAWConnection->MIDIListener (ucCable, ucChannel, ucType, ucP1, ucP2);
+
+    // Record MIDI events to active loopers
+    for (unsigned i = 0; i < 8; i++) {
+        if (m_looper[i].GetState() == CLooper::RECORDING || 
+            m_looper[i].GetState() == CLooper::OVERDUBBING) {
+            m_looper[i].RecordEvent(ucType, ucP1, ucP2);
+        }
+    }
 }
 
 // Add these functions after the existing code:
 
-void CDawController::StartLooper(unsigned nPad)
+void CDAWController::StartLooper(unsigned nPad)
 {
     if (nPad < 8) {
         if (m_looper[nPad].GetState() == CLooper::STOPPED) {
@@ -2331,7 +2359,7 @@ void CDawController::StartLooper(unsigned nPad)
     }
 }
 
-void CDawController::StopLooper(unsigned nPad)
+void CDAWController::StopLooper(unsigned nPad)
 {
     if (nPad < 8) {
         if (m_looper[nPad].GetState() != CLooper::STOPPED) {
@@ -2348,7 +2376,7 @@ void CDawController::StopLooper(unsigned nPad)
     }
 }
 
-void CDawController::ClearLooper(unsigned nPad)
+void CDAWController::ClearLooper(unsigned nPad)
 {
     if (nPad < 8) {
         m_looper[nPad].Clear();
@@ -2359,7 +2387,7 @@ void CDawController::ClearLooper(unsigned nPad)
     }
 }
 
-void CDawController::ToggleOverdub(unsigned nPad)
+void CDAWController::ToggleOverdub(unsigned nPad)
 {
     if (nPad < 8) {
         if (m_looper[nPad].GetState() == CLooper::PLAYING) {
@@ -2378,7 +2406,7 @@ void CDawController::ToggleOverdub(unsigned nPad)
     }
 }
 
-void CDawController::UpdateLooper(void)
+void CDAWController::UpdateLooper(void)
 {
     unsigned currentTime = CTimer::Get()->GetTicks();
     for (unsigned i = 0; i < 8; i++) {
@@ -2386,25 +2414,8 @@ void CDawController::UpdateLooper(void)
     }
 }
 
-// Modify the existing MIDIListener function to handle looper recording
-void CDawController::MIDIListener(u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1, u8 ucP2)
+void CDAWController::HandlePadPress(unsigned nPad, bool bLongPress)
 {
-    // ... existing code ...
-
-    // Record MIDI events to active loopers
-    for (unsigned i = 0; i < 8; i++) {
-        if (m_looper[i].GetState() == CLooper::RECORDING || 
-            m_looper[i].GetState() == CLooper::OVERDUBBING) {
-            m_looper[i].RecordEvent(ucType, ucP1, ucP2);
-        }
-    }
-}
-
-// Add looper controls to bank 2 pad handling
-void CDawController::HandlePadPress(unsigned nPad, bool bLongPress)
-{
-    // ... existing code for bank 1 pads ...
-
     // Bank 2 pads (44-51) - Looper controls
     if (nPad >= 44 && nPad <= 51) {
         unsigned looperIndex = nPad - 44;

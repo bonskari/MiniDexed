@@ -25,12 +25,16 @@
 
 #include "mididevice.h"
 #include "config.h"
-#include "dawcontroller.h"
 #include <circle/usb/usbmidi.h>
 #include <circle/device.h>
-#include <circle/string.h>
 #include <circle/types.h>
+#include "../circle-stdlib/libs/circle/include/circle/string.h"
+#include "../circle-stdlib/libs/fatfs/ff.h"
 #include <queue>
+
+// Forward declarations
+class CDAWController;
+class CUIMenu;
 
 #define USB_SYSEX_BUFFER_SIZE (MAX_DX7_SYSEX_LENGTH+128) // Allow a bit spare to handle unexpected SysEx messages
 
@@ -52,6 +56,8 @@ public:
 	
 	void UpdateDAWState (void);
 	void UpdateDAWMenu (CUIMenu::TCPageType Type, s8 ucPage, u8 ucOP, u8 ucTG);
+
+	void SetDAWController(CDAWController *pDAWController) { m_pDAWController = pDAWController; }
 
 private:
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength, unsigned nDevice, void *pParam);

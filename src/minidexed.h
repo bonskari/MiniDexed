@@ -59,6 +59,8 @@ public:
 
 	void Process (bool bPlugAndPlayUpdated);
 
+	void Update(void);
+
 #ifdef ARM_ALLOW_MULTI_CORE
 	void Run (unsigned nCore);
 #endif
