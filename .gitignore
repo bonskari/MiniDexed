@@ -53,3 +53,6 @@ Synth_Dexed
 
 # Build directories
 minidexed_*
+
+# Conversation logs
+last_convo.txt
