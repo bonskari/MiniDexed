@@ -3,6 +3,9 @@
 # Exit on error
 set -e
 
+# Set the correct toolchain prefix
+export TOOLPREFIX="aarch64-none-elf-"
+
 # Check if CIRCLE_STDLIB_DIR is set
 if [ -z "$CIRCLE_STDLIB_DIR" ]; then
     echo "CIRCLE_STDLIB_DIR is not set. Setting it to ../circle-stdlib"
@@ -30,6 +33,14 @@ git submodule update --init --recursive
 # Configure for Raspberry Pi 4
 echo "Configuring for Raspberry Pi 4..."
 ./configure --raspberrypi 4
+
+# Create a Config.mk file with the correct toolchain prefix
+echo "Creating Config.mk with toolchain settings..."
+cat > Config.mk << EOF
+AARCH = 64
+RASPPI = 4
+PREFIX = ${TOOLPREFIX}
+EOF
 
 # Build circle-stdlib
 echo "Building circle-stdlib..."
