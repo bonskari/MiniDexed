@@ -5,6 +5,10 @@
 // Copyright (C) 2022  The MiniDexed Team
 //
 #include "dawcontroller.h"
+#include "midikeyboard.h"
+#include "minidexed.h"
+#include "midilooper.h"
+#include "midi.h"
 #include <circle/logger.h>
 #include <assert.h>
 
@@ -153,4 +157,126 @@ void CDAWController::UpdatePadColors()
     m_pMIDIDevice->Send(sysex6, sizeof(sysex6), 0);
     m_pMIDIDevice->Send(sysex7, sizeof(sysex7), 0);
     m_pMIDIDevice->Send(sysex8, sizeof(sysex8), 0);
+}
+
+CMiniLab3DawConnection::CMiniLab3DawConnection(CMiniDexed *pSynthesizer, CMIDIKeyboard *pKeyboard, CConfig *pConfig, CUserInterface *pUI)
+    : m_pSynthesizer(pSynthesizer)
+    , m_pKeyboard(pKeyboard)
+    , m_pConfig(pConfig)
+    , m_pUI(pUI)
+    , m_pLooper(nullptr)
+{
+    // Get looper instance from MiniDexed
+    m_pLooper = m_pSynthesizer->GetLooper();
+    
+    // Initialize pad colors
+    UpdateState();
+}
+
+CMiniLab3DawConnection::~CMiniLab3DawConnection()
+{
+    // We don't own m_pLooper, so don't delete it
+}
+
+void CMiniLab3DawConnection::UpdateState()
+{
+    UpdateTGColors();
+    UpdateMonoColor();
+    UpdatePortamentoColor();
+    UpdateLooperColors();
+}
+
+void CMiniLab3DawConnection::UpdateLooperColors()
+{
+    if (!m_pLooper)
+        return;
+
+    // Update loop pad colors
+    for (u8 i = 0; i < 4; i++) {
+        TPadID padId = static_cast<TPadID>(i);
+        if (m_pLooper->IsRecording(i)) {
+            SetPadColor(BankB, padId, COLOR_RECORDING);
+        } else if (m_pLooper->IsPlaying(i)) {
+            SetPadColor(BankB, padId, COLOR_PLAYING);
+        } else if (m_pLooper->HasContent(i)) {
+            SetPadColor(BankB, padId, COLOR_HAS_CONTENT);
+        } else {
+            SetPadColor(BankB, padId, COLOR_OFF);
+        }
+    }
+
+    // Update control pad colors
+    SetPadColor(BankB, ClearAllPad, COLOR_OFF);
+    SetPadColor(BankB, OverdubPad, m_pLooper->IsOverdubEnabled() ? COLOR_OVERDUB : COLOR_OFF);
+    SetPadColor(BankB, MutePad, m_pLooper->IsMuted() ? COLOR_MUTE : COLOR_OFF);
+    SetPadColor(BankB, SyncPad, m_pLooper->IsSyncEnabled() ? COLOR_SYNC : COLOR_OFF);
+}
+
+void CMiniLab3DawConnection::HandleLooperPad(TPadID PadID, u8 ucValue)
+{
+    if (!m_pLooper)
+        return;
+
+    // Only handle pad press events (velocity > 0)
+    if (ucValue == 0)
+        return;
+
+    switch (PadID) {
+        case Loop1Pad:
+        case Loop2Pad:
+        case Loop3Pad:
+        case Loop4Pad:
+            {
+                u8 loopIndex = static_cast<u8>(PadID);
+                if (!m_pLooper->HasContent(loopIndex)) {
+                    m_pLooper->StartRecording(loopIndex);
+                } else if (m_pLooper->IsRecording(loopIndex)) {
+                    m_pLooper->StopLoop(loopIndex);
+                    m_pLooper->StartPlayback(loopIndex);
+                } else if (m_pLooper->IsPlaying(loopIndex)) {
+                    m_pLooper->StopLoop(loopIndex);
+                } else {
+                    m_pLooper->StartPlayback(loopIndex);
+                }
+            }
+            break;
+
+        case ClearAllPad:
+            m_pLooper->ClearAllLoops();
+            break;
+
+        case OverdubPad:
+            m_pLooper->ToggleOverdub();
+            break;
+
+        case MutePad:
+            m_pLooper->ToggleMute();
+            break;
+
+        case SyncPad:
+            m_pLooper->ToggleSync();
+            break;
+    }
+
+    // Update pad colors after state change
+    UpdateLooperColors();
+}
+
+void CMiniLab3DawConnection::MIDIListener(u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1, u8 ucP2)
+{
+    // ... existing MIDI handling code ...
+
+    // Handle pad events for Bank B (looper)
+    if (ucType == MIDI_NOTE_ON && ucChannel == 9) { // Channel 10 (zero-based)
+        if (ucP1 >= 0x44 && ucP1 < 0x4C) { // Bank B pads
+            TPadID padId = static_cast<TPadID>(ucP1 - 0x44);
+            HandleLooperPad(padId, ucP2);
+            return;
+        }
+    }
+
+    // Forward MIDI events to looper if enabled
+    if (m_pLooper && !m_pLooper->IsMuted()) {
+        m_pLooper->HandleMIDIEvent(ucType | ucChannel, ucP1, ucP2);
+    }
 } 

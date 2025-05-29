@@ -25,6 +25,13 @@
 #include "performanceconfig.h"
 #include "midilooper.h"
 #include "dawcontroller.h"
+#include <atomic>
+#include <stdint.h>
+#include "common.h"
+#include "effect_mixer.hpp"
+#include "effect_platervbstereo.h"
+#include "effect_compressor.h"
+#include "perftimer.h"
 
 class CMiniDexed
 #ifdef ARM_ALLOW_MULTI_CORE
@@ -43,6 +50,7 @@ public:
 		ParameterReverbDiffusion,
 		ParameterReverbLevel,
 		ParameterPerformanceSelectChannel,
+		ParameterPerformanceBank,
 		ParameterUnknown
 	};
 
@@ -167,6 +175,61 @@ public:
 	CDAWController* GetDAWController() { return m_pDAWController; }
 	void ProcessDAWController();
 
+	// Performance management
+	std::string GetPerformanceFileName(unsigned nID);
+	std::string GetPerformanceName(unsigned nID);
+	unsigned GetLastPerformance();
+	unsigned GetPerformanceBank();
+	unsigned GetLastPerformanceBank();
+	unsigned GetActualPerformanceID();
+	void SetActualPerformanceID(unsigned nID);
+	unsigned GetActualPerformanceBankID();
+	void SetActualPerformanceBankID(unsigned nBankID);
+	bool SetNewPerformance(unsigned nID);
+	bool SetNewPerformanceBank(unsigned nBankID);
+	void SetFirstPerformance(void);
+	void DoSetFirstPerformance(void);
+	bool SavePerformanceNewFile();
+	bool DoSavePerformanceNewFile(void);
+	bool DoSetNewPerformance(void);
+	bool DoSetNewPerformanceBank(void);
+	bool GetPerformanceSelectToLoad(void);
+	bool SavePerformance(bool bSaveAsDeault);
+	unsigned GetPerformanceSelectChannel(void);
+	void SetPerformanceSelectChannel(unsigned uCh);
+	bool IsValidPerformance(unsigned nID);
+	bool IsValidPerformanceBank(unsigned nBankID);
+	std::string GetNewPerformanceDefaultName(void);
+	void SetNewPerformanceName(const std::string &Name);
+	void SetVoiceName(const std::string &VoiceName, unsigned nTG);
+	bool DeletePerformance(unsigned nID);
+	bool DoDeletePerformance(void);
+
+	// Controller settings
+	void setMonoMode(uint8_t mono, uint8_t nTG);
+	void setEnabled(uint8_t enabled, uint8_t nTG);
+	void setPitchbendRange(uint8_t range, uint8_t nTG);
+	void setPitchbendStep(uint8_t step, uint8_t nTG);
+	void setPortamentoMode(uint8_t mode, uint8_t nTG);
+	void setPortamentoGlissando(uint8_t glissando, uint8_t nTG);
+	void setPortamentoTime(uint8_t time, uint8_t nTG);
+	void setModWheelRange(uint8_t range, uint8_t nTG);
+	void setModWheelTarget(uint8_t target, uint8_t nTG);
+	void setFootControllerRange(uint8_t range, uint8_t nTG);
+	void setFootControllerTarget(uint8_t target, uint8_t nTG);
+	void setBreathControllerRange(uint8_t range, uint8_t nTG);
+	void setBreathControllerTarget(uint8_t target, uint8_t nTG);
+	void setAftertouchRange(uint8_t range, uint8_t nTG);
+	void setAftertouchTarget(uint8_t target, uint8_t nTG);
+	void loadVoiceParameters(const uint8_t* data, uint8_t nTG);
+	void setVoiceDataElement(uint8_t data, uint8_t number, uint8_t nTG);
+	void getSysExVoiceDump(uint8_t* dest, uint8_t nTG);
+
+	void setModController(unsigned controller, unsigned parameter, uint8_t value, uint8_t nTG);
+	unsigned getModController(unsigned controller, unsigned parameter, uint8_t nTG);
+
+	int16_t checkSystemExclusive(const uint8_t* pMessage, const uint16_t nLength, uint8_t nTG);
+
 private:
 	int16_t ApplyNoteLimits (int16_t pitch, unsigned nTG);	// returns < 0 to ignore note
 	uint8_t m_uchOPMask[CConfig::AllToneGenerators];
@@ -199,6 +262,89 @@ private:
 
 	CMIDIDevice* m_pMIDIDevice;  // MIDI device instance
 	CUserInterface* m_pUI;       // User interface instance
+
+	unsigned m_nVoiceBankID[CConfig::AllToneGenerators];
+	unsigned m_nVoiceBankIDMSB[CConfig::AllToneGenerators];
+	unsigned m_nVoiceBankIDPerformance;
+	unsigned m_nVoiceBankIDMSBPerformance;
+	unsigned m_nProgram[CConfig::AllToneGenerators];
+	unsigned m_nVolume[CConfig::AllToneGenerators];
+	unsigned m_nExpression[CConfig::AllToneGenerators];
+	unsigned m_nPan[CConfig::AllToneGenerators];
+	int m_nMasterTune[CConfig::AllToneGenerators];
+	int m_nCutoff[CConfig::AllToneGenerators];
+	int m_nResonance[CConfig::AllToneGenerators];
+	unsigned m_nMIDIChannel[CConfig::AllToneGenerators];
+	unsigned m_nPitchBendRange[CConfig::AllToneGenerators];	
+	unsigned m_nPitchBendStep[CConfig::AllToneGenerators];	
+	unsigned m_nPortamentoMode[CConfig::AllToneGenerators];	
+	unsigned m_nPortamentoGlissando[CConfig::AllToneGenerators];	
+	unsigned m_nPortamentoTime[CConfig::AllToneGenerators];	
+	bool m_bMonoMode[CConfig::AllToneGenerators]; 
+	bool m_bEnabled[CConfig::AllToneGenerators];
+
+	unsigned m_nModulationWheelRange[CConfig::AllToneGenerators];
+	unsigned m_nModulationWheelTarget[CConfig::AllToneGenerators];
+	unsigned m_nFootControlRange[CConfig::AllToneGenerators];
+	unsigned m_nFootControlTarget[CConfig::AllToneGenerators];
+	unsigned m_nBreathControlRange[CConfig::AllToneGenerators];	
+	unsigned m_nBreathControlTarget[CConfig::AllToneGenerators];	
+	unsigned m_nAftertouchRange[CConfig::AllToneGenerators];	
+	unsigned m_nAftertouchTarget[CConfig::AllToneGenerators];
+		
+	unsigned m_nNoteLimitLow[CConfig::AllToneGenerators];
+	unsigned m_nNoteLimitHigh[CConfig::AllToneGenerators];
+	int m_nNoteShift[CConfig::AllToneGenerators];
+
+	unsigned m_nReverbSend[CConfig::AllToneGenerators];
+  
+	uint8_t m_nRawVoiceData[156]; 
+	
+	
+	float32_t nMasterVolume;
+
+	CUserInterface m_UI;
+	CSysExFileLoader m_SysExFileLoader;
+	CPerformanceConfig m_PerformanceConfig;
+
+	CMIDIKeyboard *m_pMIDIKeyboard[CConfig::MaxUSBMIDIDevices];
+	CPCKeyboard m_PCKeyboard;
+	CSerialMIDIDevice m_SerialMIDI;
+	bool m_bUseSerial;
+	bool m_bQuadDAC8Chan;
+
+	CSoundBaseDevice *m_pSoundDevice;
+	bool m_bChannelsSwapped;
+	unsigned m_nQueueSizeFrames;
+
+#ifdef ARM_ALLOW_MULTI_CORE
+//	unsigned m_nActiveTGsLog2;
+	std::atomic<TCoreStatus> m_CoreStatus[CORES];
+	std::atomic<unsigned> m_nFramesToProcess;
+	float32_t m_OutputLevel[CConfig::AllToneGenerators][CConfig::MaxChunkSize];
+#endif
+
+	CPerformanceTimer m_GetChunkTimer;
+	bool m_bProfileEnabled;
+
+	AudioEffectPlateReverb* reverb;
+	AudioStereoMixer<CConfig::AllToneGenerators>* tg_mixer;
+	AudioStereoMixer<CConfig::AllToneGenerators>* reverb_send_mixer;
+
+	CSpinLock m_ReverbSpinLock;
+
+	bool m_bSavePerformance;
+	bool m_bSavePerformanceNewFile;
+	bool m_bSetNewPerformance;
+	unsigned m_nSetNewPerformanceID;	
+	bool m_bSetNewPerformanceBank;
+	unsigned m_nSetNewPerformanceBankID;	
+	bool m_bSetFirstPerformance;
+	bool	m_bDeletePerformance;
+	unsigned m_nDeletePerformanceID;
+	bool m_bLoadPerformanceBusy;
+	bool m_bLoadPerformanceBankBusy;
+	bool m_bSaveAsDeault;
 };
 
 #endif 

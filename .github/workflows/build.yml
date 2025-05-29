@@ -5,7 +5,7 @@ env:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ sdawdisplay ]
   pull_request:
 
 jobs:
@@ -32,12 +32,15 @@ jobs:
         run: |
           sed -i "s/Loading.../$(date +%Y%m%d)-$(git rev-parse --short HEAD)/g" src/userinterface.cpp
 
-      # Install 64-bit toolchain (aarch64)
-      - name: Install 64-bit toolchain
+      # Install toolchains
+      - name: Install toolchains
         run: |
           set -ex
           wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.3-2021.07/binrel/gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
-          tar xf gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
+          tar xf *-aarch64-none-elf.tar.xz
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.3-2021.07/binrel/gcc-arm-10.3-2021.07-x86_64-arm-none-eabi.tar.xz
+          tar xf *-arm-none-eabi.tar.xz
+          mkdir -p kernels
 
       - name: Build for Raspberry Pi 5 (64-bit)
         run: |
@@ -63,12 +66,6 @@ jobs:
       - name: Prepare SD card content for 64-bit
         run: |
           set -ex
-          export PATH=$(readlink -f ./gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf/bin):$PATH
-          # cd ./circle-stdlib/libs/circle/boot
-          # make
-          # make armstub64
-          # cd -
-          # cp -r ./circle-stdlib/libs/circle/boot/* sdcard
           cd ./sdcard
           wget https://github.com/probonopd/MiniDexed/releases/download/assets/boot.zip
           unzip boot.zip && rm boot.zip
@@ -86,12 +83,6 @@ jobs:
           cd -
           mkdir -p ./sdcard/hardware/
           cp -r ./hwconfig/minidexed_* ./sdcard/minidexed.ini ./sdcard/hardware/
-          # WLAN firmware
-          # mkdir -p sdcard/firmware
-          # cp circle-stdlib/libs/circle/addon/wlan/sample/hello_wlan/wpa_supplicant.conf sdcard/
-          # cd sdcard/firmware
-          # make -f ../../circle-stdlib/libs/circle/addon/wlan/firmware/Makefile
-          cd -
 
       - name: Upload 64-bit artifacts
         id: upload64

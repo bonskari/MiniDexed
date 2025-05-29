@@ -2,6 +2,10 @@
 #include "minidexed.h"
 #include <circle/timer.h>
 #include <algorithm>
+#include <circle/logger.h>
+#include <assert.h>
+
+LOGMODULE ("midilooper");
 
 CMIDILooper::CMIDILooper(CMiniDexed* pSynthesizer)
     : m_overdubEnabled(false)
@@ -11,12 +15,17 @@ CMIDILooper::CMIDILooper(CMiniDexed* pSynthesizer)
     , m_quantizeMs(0)
     , m_pSynthesizer(pSynthesizer)
 {
-    ClearAllLoops();
+    for (uint8_t i = 0; i < MAX_LOOPS; i++) {
+        m_loops[i].isRecording = false;
+        m_loops[i].isPlaying = false;
+        m_loops[i].playbackPosition = 0;
+        m_loops[i].length = 0;
+    }
 }
 
 CMIDILooper::~CMIDILooper()
 {
-    ClearAllLoops();
+    StopAllNotes();
 }
 
 void CMIDILooper::StartRecording(uint8_t loopIndex)
@@ -26,28 +35,25 @@ void CMIDILooper::StartRecording(uint8_t loopIndex)
 
     Loop& loop = m_loops[loopIndex];
     
-    if (!loop.active) {
-        // Start new recording
+    if (!loop.isRecording) {
         loop.events.clear();
+        loop.isRecording = true;
+        loop.playbackPosition = 0;
         loop.length = 0;
-        loop.active = true;
-        loop.recording = true;
-        loop.startTime = GetCurrentTime();
-    } else if (m_overdubEnabled && !loop.recording) {
-        // Start overdubbing
-        loop.recording = true;
-        loop.startTime = GetCurrentTime();
     }
 }
 
 void CMIDILooper::StartPlayback(uint8_t loopIndex)
 {
-    if (loopIndex >= MAX_LOOPS || !m_loops[loopIndex].active)
+    if (loopIndex >= MAX_LOOPS)
         return;
 
     Loop& loop = m_loops[loopIndex];
-    loop.recording = false;
-    loop.startTime = GetCurrentTime();
+    
+    if (!loop.events.empty() && !loop.isPlaying) {
+        loop.isPlaying = true;
+        loop.playbackPosition = 0;
+    }
 }
 
 void CMIDILooper::StopLoop(uint8_t loopIndex)
@@ -57,21 +63,12 @@ void CMIDILooper::StopLoop(uint8_t loopIndex)
 
     Loop& loop = m_loops[loopIndex];
     
-    if (loop.recording) {
-        uint32_t currentTime = GetCurrentTime();
-        loop.length = currentTime - loop.startTime;
-        loop.recording = false;
-        
-        // Quantize loop length if enabled
-        if (m_quantizeMs > 0) {
-            loop.length = ((loop.length + m_quantizeMs/2) / m_quantizeMs) * m_quantizeMs;
+    if (loop.isRecording) {
+        loop.isRecording = false;
+        loop.length = m_globalTime;
+        if (!loop.events.empty()) {
+            loop.isPlaying = true;
         }
-        
-        // Sort events by timestamp for efficient playback
-        std::sort(loop.events.begin(), loop.events.end(), 
-            [](const MIDIEvent& a, const MIDIEvent& b) {
-                return a.timestamp < b.timestamp;
-            });
     }
 }
 
@@ -80,10 +77,12 @@ void CMIDILooper::ClearLoop(uint8_t loopIndex)
     if (loopIndex >= MAX_LOOPS)
         return;
 
-    m_loops[loopIndex].events.clear();
-    m_loops[loopIndex].length = 0;
-    m_loops[loopIndex].active = false;
-    m_loops[loopIndex].recording = false;
+    Loop& loop = m_loops[loopIndex];
+    loop.events.clear();
+    loop.isRecording = false;
+    loop.isPlaying = false;
+    loop.playbackPosition = 0;
+    loop.length = 0;
 }
 
 void CMIDILooper::ClearAllLoops()
@@ -101,6 +100,9 @@ void CMIDILooper::ToggleOverdub()
 void CMIDILooper::ToggleMute()
 {
     m_muted = !m_muted;
+    if (m_muted) {
+        StopAllNotes();
+    }
 }
 
 void CMIDILooper::ToggleSync()
@@ -110,12 +112,12 @@ void CMIDILooper::ToggleSync()
 
 bool CMIDILooper::IsRecording(uint8_t loopIndex) const
 {
-    return loopIndex < MAX_LOOPS && m_loops[loopIndex].recording;
+    return loopIndex < MAX_LOOPS && m_loops[loopIndex].isRecording;
 }
 
 bool CMIDILooper::IsPlaying(uint8_t loopIndex) const
 {
-    return loopIndex < MAX_LOOPS && m_loops[loopIndex].active && !m_loops[loopIndex].recording;
+    return loopIndex < MAX_LOOPS && m_loops[loopIndex].isPlaying;
 }
 
 bool CMIDILooper::HasContent(uint8_t loopIndex) const
@@ -135,9 +137,9 @@ void CMIDILooper::ProcessMIDIEvent(uint8_t status, uint8_t data1, uint8_t data2)
     for (uint8_t i = 0; i < MAX_LOOPS; i++) {
         Loop& loop = m_loops[i];
         
-        if (loop.recording && loop.events.size() < MAX_EVENTS_PER_LOOP) {
+        if (loop.isRecording || (loop.isPlaying && m_overdubEnabled)) {
             MIDIEvent event;
-            event.timestamp = currentTime - loop.startTime;
+            event.timestamp = currentTime - loop.playbackPosition;
             event.status = status;
             event.data1 = data1;
             event.data2 = data2;
@@ -174,9 +176,9 @@ void CMIDILooper::HandlePadPress(uint8_t padNumber, uint8_t velocity)
         return;
 
     if (velocity > 0) {
-        if (!m_loops[padNumber].active) {
+        if (!m_loops[padNumber].isRecording) {
             StartRecording(padNumber);
-        } else if (!m_loops[padNumber].recording) {
+        } else if (!m_loops[padNumber].isPlaying) {
             StartPlayback(padNumber);
         }
     }
@@ -187,17 +189,17 @@ void CMIDILooper::HandlePadRelease(uint8_t padNumber)
     if (padNumber >= MAX_LOOPS)
         return;
 
-    if (m_loops[padNumber].recording) {
+    if (m_loops[padNumber].isRecording) {
         StopLoop(padNumber);
     }
 }
 
 void CMIDILooper::ProcessLoop(Loop& loop)
 {
-    if (!loop.active || loop.events.empty())
+    if (!loop.isPlaying || loop.events.empty())
         return;
 
-    uint32_t loopTime = (GetCurrentTime() - loop.startTime) % loop.length;
+    uint32_t loopTime = (GetCurrentTime() - loop.playbackPosition) % loop.length;
     
     for (const auto& event : loop.events) {
         if (event.timestamp == loopTime) {
@@ -268,4 +270,12 @@ void CMIDILooper::SendMIDIEvent(const MIDIEvent& event)
 uint32_t CMIDILooper::GetCurrentTime() const
 {
     return CTimer::GetClockTicks() / (CTimer::CLOCKHZ / 1000); // Convert to milliseconds
+}
+
+void CMIDILooper::StopAllNotes()
+{
+    // Send All Notes Off on all channels
+    for (uint8_t channel = 0; channel < 16; channel++) {
+        // TODO: Send All Notes Off message back to synthesizer
+    }
 } 
