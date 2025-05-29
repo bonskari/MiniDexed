@@ -1,7 +1,7 @@
 # Makefile for MiniDexed
 
-CIRCLEHOME = circle-stdlib/libs/circle
-CIRCLE_STDLIB_HOME = circle-stdlib
+CIRCLEHOME = ../circle-stdlib/libs/circle
+CIRCLE_STDLIB_HOME = ../circle-stdlib
 
 include $(CIRCLEHOME)/Rules.mk
 
@@ -9,8 +9,8 @@ CFLAGS += -I $(CIRCLEHOME)/addon/fatfs \
           -I $(CIRCLEHOME)/include \
           -I $(CIRCLEHOME)/addon/display \
           -I $(CIRCLEHOME)/addon/midi \
-          -I CMSIS/Core/Include \
-          -I dexed/src \
+          -I ../CMSIS/Core/Include \
+          -I ../dexed/src \
           -I .
 
 CPPFLAGS += $(CFLAGS)
