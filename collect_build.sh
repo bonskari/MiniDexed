@@ -8,7 +8,7 @@ mkdir -p build
 
 # Copy necessary files
 cp -r src/* build/
-cp -r circle-stdlib/libs/fatfs build/
+cp -r circle-stdlib/libs/circle/addon/fatfs build/
 cp -r circle-stdlib/libs/circle build/
 cp -r CMSIS_5/CMSIS build/
 cp -r Synth_Dexed/src build/dexed
