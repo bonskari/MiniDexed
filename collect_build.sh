@@ -64,4 +64,6 @@ zip -r MiniDexed_build_$(date +%Y-%m-%d).zip sdcard/*
 # Cleanup
 rm -rf sdcard
 
+cp ./MiniDexed_build_$(date +%Y-%m-%d).zip /mnt/usb-WD_Elements/MiniDexed.zip
+
 echo "Build files have been collected into MiniDexed_build_$(date +%Y-%m-%d).zip" 
