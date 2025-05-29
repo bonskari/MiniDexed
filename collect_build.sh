@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# Set RPI version if not set
+if [ -z "${RPI}" ]; then
+    echo "RPI version not set, defaulting to 4"
+    export RPI=4
+fi
+
+# Build boot files first
+echo "Building boot files..."
+cd ./circle-stdlib/libs/circle/boot
+make
+if [ "${RPI}" -gt 2 ]
+then
+    make armstub64
+fi
+cd -
+
 # Create base directory for SD card contents
 mkdir -p sdcard
 
