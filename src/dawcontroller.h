@@ -19,6 +19,11 @@
 
 #include <circle/types.h>
 #include "uimenu.h"
+#include "config.h"
+#include "minidexed.h"
+#include "userinterface.h"
+#include "midikeyboard.h"
+#include "looper.h"
 
 class CMIDIKeyboard;
 class CMiniDexed;
@@ -43,12 +48,20 @@ public:
 
 	void MIDIListener (u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1, u8 ucP2);
 
+	// Looper control
+	void StartLooper(unsigned nPad);
+	void StopLooper(unsigned nPad);
+	void ClearLooper(unsigned nPad);
+	void ToggleOverdub(unsigned nPad);
+	void UpdateLooper(void);
+
 private:
 	CMiniDexed *m_pSynthesizer;
 	CMIDIKeyboard *m_pKeyboard;
 	CConfig *m_pConfig;
 	CUserInterface *m_pUI;
 	CDAWConnection *m_pDAWConnection;
+	CLooper m_looper[8];  // One looper per pad
 };
 
 #endif

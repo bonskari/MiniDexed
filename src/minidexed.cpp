@@ -2281,3 +2281,15 @@ unsigned CMiniDexed::getModController (unsigned controller, unsigned parameter, 
 	}
 	
 }
+
+void CMiniDexed::Update(void)
+{
+    // ... existing code ...
+
+    // Update loopers if DAW controller is active
+    if (m_pDAWController) {
+        m_pDAWController->UpdateLooper();
+    }
+
+    // ... rest of existing code ...
+}

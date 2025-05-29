@@ -2315,3 +2315,116 @@ void CDAWController::MIDIListener (u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1,
 	if (m_pDAWConnection)
 		m_pDAWConnection->MIDIListener (ucCable, ucChannel, ucType, ucP1, ucP2);
 }
+
+// Add these functions after the existing code:
+
+void CDawController::StartLooper(unsigned nPad)
+{
+    if (nPad < 8) {
+        if (m_looper[nPad].GetState() == CLooper::STOPPED) {
+            m_looper[nPad].Start();
+            // Update pad color to indicate recording
+            if (m_pDAWConnection) {
+                m_pDAWConnection->SetPadColor(nPad, {0x3F, 0x00, 0x00}); // Red for recording
+            }
+        }
+    }
+}
+
+void CDawController::StopLooper(unsigned nPad)
+{
+    if (nPad < 8) {
+        if (m_looper[nPad].GetState() != CLooper::STOPPED) {
+            m_looper[nPad].Stop();
+            // Update pad color to indicate stopped state
+            if (m_pDAWConnection) {
+                if (m_looper[nPad].IsActive()) {
+                    m_pDAWConnection->SetPadColor(nPad, {0x00, 0x3F, 0x00}); // Green for has content
+                } else {
+                    m_pDAWConnection->SetPadColor(nPad, {0x11, 0x11, 0x11}); // Dim white for empty
+                }
+            }
+        }
+    }
+}
+
+void CDawController::ClearLooper(unsigned nPad)
+{
+    if (nPad < 8) {
+        m_looper[nPad].Clear();
+        // Update pad color to indicate empty state
+        if (m_pDAWConnection) {
+            m_pDAWConnection->SetPadColor(nPad, {0x11, 0x11, 0x11}); // Dim white for empty
+        }
+    }
+}
+
+void CDawController::ToggleOverdub(unsigned nPad)
+{
+    if (nPad < 8) {
+        if (m_looper[nPad].GetState() == CLooper::PLAYING) {
+            m_looper[nPad].Overdub();
+            // Update pad color to indicate overdubbing
+            if (m_pDAWConnection) {
+                m_pDAWConnection->SetPadColor(nPad, {0x3F, 0x3F, 0x00}); // Yellow for overdubbing
+            }
+        } else if (m_looper[nPad].GetState() == CLooper::OVERDUBBING) {
+            m_looper[nPad].Overdub();
+            // Update pad color back to playing state
+            if (m_pDAWConnection) {
+                m_pDAWConnection->SetPadColor(nPad, {0x00, 0x3F, 0x00}); // Green for playing
+            }
+        }
+    }
+}
+
+void CDawController::UpdateLooper(void)
+{
+    unsigned currentTime = CTimer::Get()->GetTicks();
+    for (unsigned i = 0; i < 8; i++) {
+        m_looper[i].Update(currentTime);
+    }
+}
+
+// Modify the existing MIDIListener function to handle looper recording
+void CDawController::MIDIListener(u8 ucCable, u8 ucChannel, u8 ucType, u8 ucP1, u8 ucP2)
+{
+    // ... existing code ...
+
+    // Record MIDI events to active loopers
+    for (unsigned i = 0; i < 8; i++) {
+        if (m_looper[i].GetState() == CLooper::RECORDING || 
+            m_looper[i].GetState() == CLooper::OVERDUBBING) {
+            m_looper[i].RecordEvent(ucType, ucP1, ucP2);
+        }
+    }
+}
+
+// Add looper controls to bank 2 pad handling
+void CDawController::HandlePadPress(unsigned nPad, bool bLongPress)
+{
+    // ... existing code for bank 1 pads ...
+
+    // Bank 2 pads (44-51) - Looper controls
+    if (nPad >= 44 && nPad <= 51) {
+        unsigned looperIndex = nPad - 44;
+        
+        if (bLongPress) {
+            ClearLooper(looperIndex);  // Long press to clear
+        } else {
+            if (m_looper[looperIndex].GetState() == CLooper::STOPPED) {
+                if (m_looper[looperIndex].IsActive()) {
+                    m_looper[looperIndex].Play();  // Start playback if we have content
+                } else {
+                    StartLooper(looperIndex);  // Start recording if empty
+                }
+            } else if (m_looper[looperIndex].GetState() == CLooper::RECORDING) {
+                StopLooper(looperIndex);  // Stop recording
+                m_looper[looperIndex].Play();  // Start playback immediately
+            } else if (m_looper[looperIndex].GetState() == CLooper::PLAYING ||
+                      m_looper[looperIndex].GetState() == CLooper::OVERDUBBING) {
+                ToggleOverdub(looperIndex);  // Toggle overdub mode
+            }
+        }
+    }
+}
