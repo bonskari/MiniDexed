@@ -3,9 +3,6 @@
 # Exit on error
 set -e
 
-# Set toolchain prefix
-export TOOLPREFIX=aarch64-none-elf-
-
 # Clone Circle and its dependencies if not already present
 if [ ! -d "circle-stdlib" ]; then
     git clone https://github.com/smuehlst/circle-stdlib.git
@@ -27,20 +24,16 @@ fi
 # Configure circle-stdlib
 cd circle-stdlib
 
-# Create Config.mk with correct settings for Raspberry Pi 4
+# Create Config.mk with correct settings
 cat > Config.mk << EOF
 AARCH = 64
 RASPPI = 4
-PREFIX = ${TOOLPREFIX}
+PREFIX = aarch64-none-elf-
 EOF
 
-# Configure for Raspberry Pi 4
-./configure --raspberrypi=4
-
-# Build circle
-cd libs/circle
-./makeall clean
-./makeall --nosample
-cd ../..
+# Build Circle libraries
+cd libs/circle && ./makeall clean
+cd ../.. && make
+cd ..
 
 echo "Circle environment setup complete!" 
