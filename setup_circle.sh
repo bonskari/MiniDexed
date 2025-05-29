@@ -27,15 +27,20 @@ fi
 # Configure circle-stdlib
 cd circle-stdlib
 
-# Create Config.mk with correct settings
+# Create Config.mk with correct settings for Raspberry Pi 4
 cat > Config.mk << EOF
 AARCH = 64
 RASPPI = 4
 PREFIX = ${TOOLPREFIX}
 EOF
 
-./configure --raspberrypi 4
-make
-cd ..
+# Configure for Raspberry Pi 4
+./configure --raspberrypi=4
+
+# Build circle
+cd libs/circle
+./makeall clean
+./makeall --nosample
+cd ../..
 
 echo "Circle environment setup complete!" 
