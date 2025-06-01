@@ -15,6 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include <circle/string.h>
+#include <circle/timer.h>
 
 #include "dawcontroller.h"
 #include "midikeyboard.h"
@@ -2268,11 +2269,39 @@ void CDAWController::OnConnect (void)
 	delete m_pDAWConnection;
 	m_pDAWConnection = 0;
 
+	// Add debug logging
+	printf("DAW Controller: Sending device inquiry\n");
+	for (unsigned i = 0; i < sizeof inquiry; i++) {
+		printf("0x%02X ", inquiry[i]);
+	}
+	printf("\n");
+
 	m_pKeyboard->Send (inquiry, sizeof inquiry, 0);
+}
+
+void CDAWController::DAWFallbackTimer(TKernelTimerHandle hTimer, void *pParam, void *pContext)
+{
+	CDAWController *pThis = static_cast<CDAWController *>(pContext);
+	
+	// If we still don't have a DAW connection after 2 seconds, assume MiniLab 3
+	if (!pThis->m_pDAWConnection) {
+		printf("DAW Controller: No device response, assuming MiniLab 3\n");
+		pThis->m_pDAWConnection = new CMiniLab3DawConnection(
+			pThis->m_pSynthesizer, pThis->m_pKeyboard, 
+			pThis->m_pConfig, pThis->m_pUI);
+	}
 }
 
 void CDAWController::MIDISysexHandler (u8 *pPacket, unsigned nLength, unsigned nCable)
 {
+	// Add debug logging for all received SysEx messages
+	printf("DAW Controller: Received SysEx message (length=%u, cable=%u): ", nLength, nCable);
+	for (unsigned i = 0; i < nLength && i < 20; i++) {  // Show first 20 bytes
+		printf("0x%02X ", pPacket[i]);
+	}
+	if (nLength > 20) printf("...");
+	printf("\n");
+
 	static const uint8_t pMiniLab3[] =		{0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x04, 0x04};
 	static const uint8_t pKeyLabEs_49[] = 	{0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x52};
 	static const uint8_t pKeyLabEs_61[] = 	{0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54};
@@ -2286,6 +2315,7 @@ void CDAWController::MIDISysexHandler (u8 *pPacket, unsigned nLength, unsigned n
 
 	if (nLength > sizeof pMiniLab3 && memcmp (pPacket, pMiniLab3, sizeof pMiniLab3) == 0)
 	{
+		printf("DAW Controller: Detected MiniLab 3!\n");
 		m_pDAWConnection = new CMiniLab3DawConnection (m_pSynthesizer, m_pKeyboard, m_pConfig, m_pUI);
 	}
 	else if (nLength > sizeof pKeyLabEs_49 && (
@@ -2293,6 +2323,7 @@ void CDAWController::MIDISysexHandler (u8 *pPacket, unsigned nLength, unsigned n
 		memcmp (pPacket, pKeyLabEs_61, sizeof pKeyLabEs_61) == 0 ||
 		memcmp (pPacket, pKeyLabEs_88, sizeof pKeyLabEs_88) == 0))
 	{
+		printf("DAW Controller: Detected KeyLab Essential!\n");
 		m_pDAWConnection = new CKeyLabEsDawConnection (m_pSynthesizer, m_pKeyboard, m_pConfig, m_pUI);
 	}
 	else if (nLength > sizeof pKeyLab2_61 && (
@@ -2300,6 +2331,7 @@ void CDAWController::MIDISysexHandler (u8 *pPacket, unsigned nLength, unsigned n
 		memcmp (pPacket, pKeyLab2_61, sizeof pKeyLab2_61) == 0 ||
 		memcmp (pPacket, pKeyLab2_88, sizeof pKeyLab2_88) == 0))
 	{
+		printf("DAW Controller: Detected KeyLab 2!\n");
 		m_pDAWConnection = new CKeyLab2DawConnection (m_pSynthesizer, m_pKeyboard, m_pConfig, m_pUI);
 	}
 	else if (nLength > sizeof pKeyLabEs3_49 && (
@@ -2307,7 +2339,18 @@ void CDAWController::MIDISysexHandler (u8 *pPacket, unsigned nLength, unsigned n
 		memcmp (pPacket, pKeyLabEs3_61, sizeof pKeyLabEs3_61) == 0 ||
 		memcmp (pPacket, pKeyLabEs3_88, sizeof pKeyLabEs3_88) == 0))
 	{
+		printf("DAW Controller: Detected KeyLab Essential 3!\n");
 		m_pDAWConnection = new CKeyLabEs3DawConnection (m_pSynthesizer, m_pKeyboard, m_pConfig, m_pUI);
+	}
+	else
+	{
+		printf("DAW Controller: No matching device found for this SysEx message\n");
+		// Show the expected patterns for debugging
+		printf("Expected MiniLab 3: ");
+		for (unsigned i = 0; i < sizeof pMiniLab3; i++) {
+			printf("0x%02X ", pMiniLab3[i]);
+		}
+		printf("\n");
 	}
 }
 
